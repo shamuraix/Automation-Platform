@@ -264,8 +264,8 @@ ansible-galaxy init my-custom-role
     
 - name: Build Packer Template
   run: |
-    packer validate packer/ubuntu-22.04-ansible.pkr.hcl
-    packer build packer/ubuntu-22.04-ansible.pkr.hcl
+    packer validate packer/builds/linux/ubuntu/24.04.3/template.pkr.hcl
+    packer build packer/builds/linux/ubuntu/24.04.3/template.pkr.hcl
 ```
 
 This Ansible integration provides a robust, scalable solution for managing your homelab infrastructure with consistent, repeatable deployments.

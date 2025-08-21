@@ -1,4 +1,12 @@
-# Ubuntu 24.04.3 LTS Template with Ansible provisioning
+# Ubuntu 24.04.3 LTS Baseline Template
+#
+# Purpose: Create a minimal, hardened Ubuntu 24.04.3 LTS base template with:
+# - CIS benchmark compliance and security hardening
+# - Essential system tools and baseline configuration
+# - Clean state ready for application deployment via OpenTofu
+#
+# Note: Application-specific software (Docker, Kubernetes, etc.) is NOT installed here.
+# Those will be deployed by OpenTofu during infrastructure provisioning.
 
 # Packer configuration
 packer {
@@ -54,13 +62,12 @@ variable "ssh_password" {
 locals {
   timestamp = regex_replace(timestamp(), "[- TZ:]", "")
   # Calculate paths relative to project root
-  project_root = "${path.root}/../../../../../"
-  http_dir = "${local.project_root}http/ubuntu"
+  project_root      = "${path.root}/../../../../../"
   ansible_playbooks = "${local.project_root}ansible/playbooks"
   # Template naming
   template_name = "ubuntu-24.04.3-ansible-template-${local.timestamp}"
-  os_family = "ubuntu"
-  os_version = "24.04.3"
+  os_family     = "ubuntu"
+  os_version    = "24.04.3"
 }
 
 source "proxmox-iso" "ubuntu-24-04-3-ansible" {
@@ -73,21 +80,21 @@ source "proxmox-iso" "ubuntu-24-04-3-ansible" {
 
   # VM configuration
   vm_name              = local.template_name
-  template_description = "Ubuntu ${local.os_version} LTS template with Ansible provisioning built on ${timestamp()}"
-  
+  template_description = "Ubuntu ${local.os_version} LTS baseline template with CIS compliance built on ${timestamp()}"
+
   # Boot ISO configuration
   boot_iso {
     iso_url          = "https://releases.ubuntu.com/24.04.3/ubuntu-24.04.3-live-server-amd64.iso"
-    iso_checksum     = "sha256:a435f6f393dda581172490eda9f683c32e495158a780b5a1de422ee77d98e909"
+    iso_checksum     = "sha256:c3514bf0056180d09376462a7a1b4f213c1d6e8ea67fae5c25099c6fd3d8274b"
     iso_storage_pool = "local"
   }
-  
+
   # Hardware configuration
   cores    = 2
   memory   = 2048
   sockets  = 1
   cpu_type = "host"
-  
+
   # Disk configuration
   scsi_controller = "virtio-scsi-pci"
   disks {
@@ -96,17 +103,17 @@ source "proxmox-iso" "ubuntu-24-04-3-ansible" {
     storage_pool = "local-lvm"
     format       = "raw"
   }
-  
+
   # Network configuration
   network_adapters {
     bridge = "vmbr0"
     model  = "virtio"
   }
-  
+
   # Cloud-init configuration
   cloud_init              = true
   cloud_init_storage_pool = "local-lvm"
-  
+
   # Boot configuration
   boot_command = [
     "<esc><wait>",
@@ -117,10 +124,10 @@ source "proxmox-iso" "ubuntu-24-04-3-ansible" {
     "<f10><wait>"
   ]
   boot_wait = "5s"
-  
+
   # HTTP server configuration
-  http_directory = local.http_dir
-  
+  http_directory = "http"
+
   # SSH configuration
   ssh_username = var.ssh_username
   ssh_password = var.ssh_password
@@ -129,7 +136,7 @@ source "proxmox-iso" "ubuntu-24-04-3-ansible" {
 
 # Build configuration with Ansible
 build {
-  name = "ubuntu-24-04-3-lts"
+  name    = "ubuntu-24-04-3-lts"
   sources = ["source.proxmox-iso.ubuntu-24-04-3-ansible"]
 
   # Wait for cloud-init to complete
@@ -158,26 +165,6 @@ build {
       "--extra-vars", "ansible_user=${var.ssh_username}",
       "--extra-vars", "os_family=${local.os_family}",
       "--extra-vars", "os_version=${local.os_version}",
-      "-v"
-    ]
-  }
-
-  # Install Docker with Ansible
-  provisioner "ansible-local" {
-    playbook_file = "${local.ansible_playbooks}/packer-docker.yml"
-    extra_arguments = [
-      "--extra-vars", "ansible_user=${var.ssh_username}",
-      "--extra-vars", "os_family=${local.os_family}",
-      "-v"
-    ]
-  }
-
-  # Install Kubernetes tools with Ansible
-  provisioner "ansible-local" {
-    playbook_file = "${local.ansible_playbooks}/packer-kubernetes.yml"
-    extra_arguments = [
-      "--extra-vars", "ansible_user=${var.ssh_username}",
-      "--extra-vars", "os_family=ubuntu",
       "-v"
     ]
   }

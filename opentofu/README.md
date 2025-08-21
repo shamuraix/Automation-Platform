@@ -85,7 +85,7 @@ proxmox_password = "your-password"
 node_name        = "your-node-name"
 
 # Template configuration
-ubuntu_template_name = "ubuntu-22.04-ansible-template"
+ubuntu_template_name = "ubuntu-24043-ansible-template"
 template_storage     = "local"
 ```
 
@@ -115,7 +115,7 @@ module "my_servers" {
   for_each = local.my_servers
   
   vm_name     = each.key
-  template_id = "local:vztmpl/ubuntu-22.04-ansible-template"
+  template_id = "local:vztmpl/ubuntu-24043-ansible-template"
   # ... other configuration
 }
 

@@ -79,14 +79,9 @@ The interactive script guides you through:
 ## 📦 Supported Linux Distributions
 
 ### Production-Ready Distributions
-- **Ubuntu 22.04 LTS** - Long-term support, battle-tested
-- **Rocky Linux 9** - RHEL-compatible enterprise Linux
-- **Debian 12 (Bookworm)** - Stable release
-
-### Latest/Testing Distributions
 - **Ubuntu 24.04.3 LTS** - Latest LTS with newest features
-- **Rocky Linux 10** - Latest RHEL-compatible (may be beta/RC)
-- **Debian 13 (Trixie)** - Testing branch (may be unstable)
+- **Rocky Linux 10** - Latest RHEL-compatible enterprise Linux
+- **Debian 12 (Bookworm)** - Stable release with security focus
 
 ## 🏗️ Component Details
 
@@ -119,9 +114,9 @@ Each distribution includes:
 ./build-template.sh
 
 # Direct Packer commands
-packer build -var-file="packer/packer.pkrvars.hcl" packer/ubuntu-24.04.3-ansible.pkr.hcl
-packer build -var-file="packer/packer.pkrvars.hcl" packer/rocky-10-ansible.pkr.hcl
-packer build -var-file="packer/packer.pkrvars.hcl" packer/debian-13-ansible.pkr.hcl
+packer build -var-file="packer/configs/packer.pkrvars.hcl" packer/builds/linux/ubuntu/24.04.3/template.pkr.hcl
+packer build -var-file="packer/configs/packer.pkrvars.hcl" packer/builds/linux/rocky/10/template.pkr.hcl
+packer build -var-file="packer/configs/packer.pkrvars.hcl" packer/builds/linux/debian/12/template.pkr.hcl
 ```
 
 ### Deploying Infrastructure
@@ -301,9 +296,9 @@ python_package: python3
 
 ### Distribution-Specific Notes
 
-- **Rocky Linux 10**: May be in beta/RC status - test thoroughly
-- **Debian 13**: Testing branch - expect occasional instability
-- **Ubuntu 24.04.3**: Latest LTS - generally stable but newer packages
+- **Rocky Linux 10**: Latest enterprise Linux with enhanced security features
+- **Debian 12**: Stable release with strong CIS compliance foundation
+- **Ubuntu 24.04.3**: Latest LTS with modern tooling and security updates
 
 ### Useful Commands
 
@@ -344,12 +339,9 @@ ansible all -m ping
 
 | Distribution | Status | Last Updated | Ansible Support | Notes |
 |-------------|--------|--------------|-----------------|-------|
-| Ubuntu 22.04 LTS | ✅ Stable | Latest | ✅ Full | Production ready |
-| Ubuntu 24.04.3 LTS | ✅ Stable | Latest | ✅ Full | Latest LTS |
-| Rocky Linux 9 | ✅ Stable | Latest | ✅ Full | Enterprise ready |
-| Rocky Linux 10 | ⚠️ Beta | Latest | ✅ Full | May be beta/RC |
-| Debian 12 | ✅ Stable | Latest | ✅ Full | Production ready |
-| Debian 13 | ⚠️ Testing | Latest | ✅ Full | May be unstable |
+| Ubuntu 24.04.3 LTS | ✅ Stable | Latest | ✅ Full | Latest LTS with security focus |
+| Rocky Linux 10 | ✅ Stable | Latest | ✅ Full | Enterprise ready |
+| Debian 12 | ✅ Stable | Latest | ✅ Full | Production ready with CIS compliance |
 
 **Legend**: ✅ Stable, ⚠️ Caution Advised, ❌ Not Ready
 

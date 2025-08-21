@@ -1,4 +1,12 @@
-# Rocky Linux 10 Template with Ansible provisioning
+# Rocky Linux 10 Baseline Template
+#
+# Purpose: Create a minimal, hardened Rocky Linux 10 base template with:
+# - CIS benchmark compliance and security hardening
+# - Essential system tools and baseline configuration
+# - Clean state ready for application deployment via OpenTofu
+#
+# Note: Application-specific software (Docker, Kubernetes, etc.) is NOT installed here.
+# Those will be deployed by OpenTofu during infrastructure provisioning.
 
 # Packer configuration
 packer {
@@ -54,13 +62,12 @@ variable "ssh_password" {
 locals {
   timestamp = regex_replace(timestamp(), "[- TZ:]", "")
   # Calculate paths relative to project root
-  project_root = "${path.root}/../../../../../"
-    http_dir = "${local.project_root}http/rocky"
+  project_root      = "${path.root}/../../../../../"
   ansible_playbooks = "${local.project_root}ansible/playbooks"
-    # Template naming
+  # Template naming
   template_name = "rocky-10-ansible-template-${local.timestamp}"
-  os_family = "rocky"
-  os_version = "10"
+  os_family     = "rocky"
+  os_version    = "10"
 }
 
 source "proxmox-iso" "rocky-10-ansible" {
@@ -73,21 +80,21 @@ source "proxmox-iso" "rocky-10-ansible" {
 
   # VM configuration
   vm_name              = local.template_name
-  template_description = "Rocky Linux ${local.os_version} template with Ansible provisioning built on ${timestamp()}"
-  
+  template_description = "Rocky Linux ${local.os_version} baseline template with CIS compliance built on ${timestamp()}"
+
   # Boot ISO configuration
   boot_iso {
     iso_url          = "https://download.rockylinux.org/pub/rocky/10/isos/x86_64/Rocky-10.0-x86_64-minimal.iso"
     iso_checksum     = "sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
     iso_storage_pool = "local"
   }
-  
+
   # Hardware configuration
   cores    = 2
   memory   = 2048
   sockets  = 1
   cpu_type = "host"
-  
+
   # Disk configuration
   scsi_controller = "virtio-scsi-pci"
   disks {
@@ -96,17 +103,17 @@ source "proxmox-iso" "rocky-10-ansible" {
     storage_pool = "local-lvm"
     format       = "raw"
   }
-  
+
   # Network configuration
   network_adapters {
     bridge = "vmbr0"
     model  = "virtio"
   }
-  
+
   # Cloud-init configuration
   cloud_init              = true
   cloud_init_storage_pool = "local-lvm"
-  
+
   # Boot configuration for kickstart
   boot_command = [
     "<up><wait><tab><wait>",
@@ -114,10 +121,10 @@ source "proxmox-iso" "rocky-10-ansible" {
     "<enter><wait>"
   ]
   boot_wait = "10s"
-  
+
   # HTTP server for kickstart files
-  http_directory = local.http_dir
-  
+  http_directory = "http"
+
   # SSH configuration
   ssh_username = var.ssh_username
   ssh_password = var.ssh_password
@@ -126,7 +133,7 @@ source "proxmox-iso" "rocky-10-ansible" {
 
 # Build configuration with Ansible
 build {
-  name = "rocky-10"
+  name    = "rocky-10"
   sources = ["source.proxmox-iso.rocky-10-ansible"]
 
   # Wait for installation to complete
@@ -153,26 +160,6 @@ build {
       "--extra-vars", "ansible_user=${var.ssh_username}",
       "--extra-vars", "os_family=${local.os_family}",
       "--extra-vars", "os_version=${local.os_version}",
-      "-v"
-    ]
-  }
-
-  # Install Docker with Ansible
-  provisioner "ansible-local" {
-    playbook_file = "${local.ansible_playbooks}/packer-docker.yml"
-    extra_arguments = [
-      "--extra-vars", "ansible_user=${var.ssh_username}",
-      "--extra-vars", "os_family=${local.os_family}",
-      "-v"
-    ]
-  }
-
-  # Install Kubernetes tools with Ansible
-  provisioner "ansible-local" {
-    playbook_file = "${local.ansible_playbooks}/packer-kubernetes.yml"
-    extra_arguments = [
-      "--extra-vars", "ansible_user=${var.ssh_username}",
-      "--extra-vars", "os_family=${local.os_family}",
       "-v"
     ]
   }

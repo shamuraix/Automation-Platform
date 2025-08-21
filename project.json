@@ -1,7 +1,7 @@
 {
   "project": {
     "name": "Automation Platform",
-    "description": "Infrastructure automation platform using Packer, OpenTofu, and Ansible",
+    "description": "Infrastructure automation platform: Packer for baseline VM templates with CIS compliance, OpenTofu for infrastructure deployment and application provisioning, Ansible for configuration management",
     "version": "1.0.0"
   },
   "directories": {
@@ -35,9 +35,9 @@
       "example": "packer/packer.pkrvars.hcl.example",
       "description": "Packer variables for Proxmox builds"
     },
-    "packer_shared": {
+    "packer_configs": {
       "path": "packer/variables.pkr.hcl",
-      "description": "Shared Packer variables and configuration"
+      "description": "Packer configuration variables and settings"
     },
     "terraform_vars": {
       "path": "opentofu/terraform.tfvars",
@@ -48,39 +48,30 @@
   "templates": [
     {
       "id": 1,
-      "key": "ubuntu-22.04",
-      "name": "Ubuntu 22.04 LTS",
-      "description": "Ubuntu 22.04 LTS with Ansible",
-      "file": "packer/builds/linux/ubuntu/22.04/template.pkr.hcl",
-      "os": "ubuntu",
-      "version": "22.04"
-    },
-    {
-      "id": 2,
       "key": "ubuntu-24.04.3",
       "name": "Ubuntu 24.04.3 LTS",
-      "description": "Ubuntu 24.04.3 LTS with Ansible",
+      "description": "Ubuntu 24.04.3 LTS baseline with CIS compliance",
       "file": "packer/builds/linux/ubuntu/24.04.3/template.pkr.hcl",
       "os": "ubuntu",
       "version": "24.04.3"
     },
     {
-      "id": 3,
+      "id": 2,
       "key": "rocky-10",
       "name": "Rocky Linux 10",
-      "description": "Rocky Linux 10 with Ansible",
+      "description": "Rocky Linux 10 baseline with CIS compliance",
       "file": "packer/builds/linux/rocky/10/template.pkr.hcl",
       "os": "rocky",
       "version": "10"
     },
     {
-      "id": 4,
-      "key": "debian-13",
-      "name": "Debian 13 (Trixie)",
-      "description": "Debian 13 (Trixie) with Ansible",
-      "file": "packer/builds/linux/debian/13/template.pkr.hcl",
+      "id": 3,
+      "key": "debian-12",
+      "name": "Debian 12 (Bookworm)",
+      "description": "Debian 12 (Bookworm) baseline with CIS compliance",
+      "file": "packer/builds/linux/debian/12/template.pkr.hcl",
       "os": "debian",
-      "version": "13"
+      "version": "12"
     }
   ],
   "menu_options": {

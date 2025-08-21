@@ -6,15 +6,18 @@ This directory contains Packer configurations for building custom VM templates t
 
 ```
 packer/
-├── ubuntu-22.04-ansible.pkr.hcl  # Ansible-enhanced Packer configuration
-├── packer.pkrvars.hcl.example    # Variables template
-├── http/                         # Cloud-init files for autoinstall
-│   ├── user-data                 # Ubuntu autoinstall configuration
-│   └── meta-data                 # Cloud-init metadata
+├── builds/                       # Template builds organized by OS
+│   └── linux/
+│       ├── ubuntu/24.04.3/      # Ubuntu 24.04.3 LTS template
+│       ├── rocky/10/             # Rocky Linux 10 template
+│       └── debian/12/            # Debian 12 template
+├── configs/                      # Shared configuration files
+│   ├── packer.pkrvars.hcl        # Variables configuration
+│   └── packer.pkrvars.hcl.example # Variables template
 └── README.md                     # This documentation
 ```
 
-Note: Shell scripts have been removed in favor of Ansible provisioning for better maintainability and consistency.
+Note: Templates use individual HTTP directories for better isolation and maintainability.
 
 ## Prerequisites
 
@@ -26,7 +29,7 @@ Note: Shell scripts have been removed in favor of Ansible provisioning for bette
 
 1. **Configure credentials**:
    ```bash
-   cp packer/packer.pkrvars.hcl.example packer/packer.pkrvars.hcl
+   cp packer/configs/packer.pkrvars.hcl.example packer/configs/packer.pkrvars.hcl
    # Edit with your Proxmox details
    ```
 
@@ -37,18 +40,19 @@ Note: Shell scripts have been removed in favor of Ansible provisioning for bette
 
 ## Template Features
 
-The Ubuntu 22.04 template includes:
+The modern templates include:
 
 ### Base System
-- Ubuntu 22.04 LTS Server
+- Latest LTS/Stable releases
 - Cloud-init configured for Proxmox
 - QEMU Guest Agent
 - Automatic security updates
 - SSH server with key authentication
 
-### Container Runtime
-- Docker Engine with Docker Compose
-- Containerd runtime
+### Security Baseline
+- CIS compliance foundations
+- Hardened SSH configuration
+- Minimal attack surface
 - User added to docker group
 
 ### Kubernetes Tools
@@ -81,7 +85,7 @@ module "my_vm" {
   source = "./modules/vm"
   
   vm_name     = "my-server"
-  template_id = "local:vztmpl/ubuntu-22.04-template"  # Packer-built template
+  template_id = "local:vztmpl/ubuntu-24043-template"  # Packer-built template
   # ... other configuration
 }
 ```
@@ -90,10 +94,10 @@ module "my_vm" {
 
 The Packer build process:
 
-1. **Download Ubuntu ISO**: Fetches Ubuntu 22.04 LTS Server ISO
-2. **Create VM**: Boots VM in Proxmox with autoinstall
-3. **Wait for Installation**: Uses cloud-init for automated setup
-4. **Provision Software**: Runs installation scripts
+1. **Download OS ISO**: Fetches latest stable ISO for selected distribution
+2. **Create VM**: Boots VM in Proxmox with automated installation
+3. **Wait for Installation**: Uses cloud-init/kickstart/preseed for automated setup
+4. **Provision Software**: Runs baseline security configuration
 5. **Configure System**: Prepares template for cloud-init usage
 6. **Cleanup**: Removes logs, caches, and sensitive data
 7. **Create Template**: Converts VM to reusable template

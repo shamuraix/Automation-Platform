@@ -1,0 +1,50 @@
+#cloud-config
+autoinstall:
+  version: 1
+  locale: en_US
+  keyboard:
+    layout: us
+  ssh:
+    install-server: true
+    allow-pw: true
+    disable_root: true
+    ssh_quiet_keygen: true
+    allow_public_ssh_keys: true
+  packages:
+    - openssh-server
+    - qemu-guest-agent
+    - cloud-init
+    - whois
+    - zsh
+    - wget
+    - curl
+    - vim
+    - git
+    - python3
+    - python3-pip
+    - python3-venv
+  storage:
+    layout:
+      name: direct
+    swap:
+      size: 0
+  user-data:
+    package_upgrade: false
+    timezone: UTC
+    users:
+      - name: ubuntu
+        groups: [adm, sudo]
+        lock-passwd: false
+        sudo: ALL=(ALL) NOPASSWD:ALL
+        shell: /bin/bash
+        # Password: ubuntu (change in production)
+        passwd: "$6$rounds=4096$wQ/.6Wi.z3xdA$osIBB7WAhWBqRdG6tgJb4QiSupvhpF8D67wjcrPorFHP7x4jzgXvhfqNTF7HQpoQNWpaHv0UzaQZLGgbfGGNO1"
+  late-commands:
+    - sed -i 's/^#*\(send dhcp-client-identifier\).*$/\1 = hardware;/' /target/etc/dhcp/dhclient.conf
+    - 'sed -i "s/dhcp4: true/&\n      dhcp-identifier: mac/" /target/etc/netplan/00-installer-config.yaml'
+    - echo 'ubuntu ALL=(ALL) NOPASSWD:ALL' > /target/etc/sudoers.d/ubuntu
+    - systemctl enable qemu-guest-agent --root=/target
+    - systemctl enable cloud-init --root=/target
+    - systemctl enable cloud-init-local --root=/target
+    - systemctl enable cloud-config --root=/target
+    - systemctl enable cloud-final --root=/target
