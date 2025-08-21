@@ -1,0 +1,89 @@
+---
+- name: Base system setup for Packer template
+  hosts: localhost
+  connection: local
+  become: yes
+  vars:
+    ansible_user: "{{ ansible_user | default('ubuntu') }}"
+  
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Upgrade all packages
+      apt:
+        upgrade: dist
+        autoremove: yes
+        autoclean: yes
+
+    - name: Install essential packages
+      apt:
+        name:
+          - qemu-guest-agent
+          - cloud-init
+          - curl
+          - wget
+          - vim
+          - git
+          - htop
+          - tree
+          - jq
+          - unzip
+          - net-tools
+          - dnsutils
+          - tcpdump
+          - nmap
+          - fail2ban
+          - ufw
+          - python3-pip
+          - software-properties-common
+          - apt-transport-https
+          - ca-certificates
+          - gnupg
+          - lsb-release
+        state: present
+
+    - name: Enable qemu-guest-agent service
+      systemd:
+        name: qemu-guest-agent
+        enabled: yes
+        state: started
+
+    - name: Configure UFW firewall
+      ufw:
+        state: enabled
+        policy: deny
+        direction: incoming
+
+    - name: Allow SSH through UFW
+      ufw:
+        rule: allow
+        name: OpenSSH
+
+    - name: Enable fail2ban service
+      systemd:
+        name: fail2ban
+        enabled: yes
+        state: started
+
+    - name: Configure automatic security updates
+      copy:
+        content: |
+          APT::Periodic::Update-Package-Lists "1";
+          APT::Periodic::Download-Upgradeable-Packages "1";
+          APT::Periodic::AutocleanInterval "7";
+          APT::Periodic::Unattended-Upgrade "1";
+        dest: /etc/apt/apt.conf.d/20auto-upgrades
+        mode: '0644'
+
+    - name: Set timezone to UTC
+      timezone:
+        name: UTC
+
+    - name: Enable systemd-timesyncd
+      systemd:
+        name: systemd-timesyncd
+        enabled: yes
+        state: started

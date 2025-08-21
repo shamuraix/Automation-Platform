@@ -1,0 +1,11 @@
+# Copy this file to terraform.tfvars and fill in your values
+# terraform.tfvars is gitignored for security
+
+proxmox_endpoint = "https://your-proxmox-ip:8006/api2/json"
+proxmox_username = "root@pam"
+proxmox_password = "your-password"
+node_name        = "your-node-name"
+
+# Template configuration (use Packer-built templates)
+ubuntu_template_name = "ubuntu-22.04-template"
+template_storage     = "local"

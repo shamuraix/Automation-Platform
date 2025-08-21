@@ -1,0 +1,41 @@
+---
+- name: Configure K3s Worker Nodes
+  hosts: k3s_workers
+  become: yes
+  vars:
+    k3s_version: "v1.28.8+k3s1"
+    k3s_token: "{{ k3s_cluster_token | default('secure-random-token-change-me') }}"
+    k3s_server_url: "https://{{ groups['k3s_servers'][0] }}:6443"
+    
+  tasks:
+    - name: Download k3s binary
+      get_url:
+        url: "https://github.com/k3s-io/k3s/releases/download/{{ k3s_version }}/k3s"
+        dest: /usr/local/bin/k3s
+        mode: '0755'
+
+    - name: Create k3s service file for worker
+      template:
+        src: k3s-agent.service.j2
+        dest: /etc/systemd/system/k3s-agent.service
+      notify: restart k3s-agent
+
+    - name: Enable and start k3s-agent service
+      systemd:
+        name: k3s-agent
+        enabled: yes
+        state: started
+        daemon_reload: yes
+
+    - name: Wait for k3s-agent to be ready
+      wait_for:
+        port: 10250
+        host: "{{ ansible_default_ipv4.address }}"
+        delay: 30
+        timeout: 300
+
+  handlers:
+    - name: restart k3s-agent
+      systemd:
+        name: k3s-agent
+        state: restarted

@@ -1,0 +1,9 @@
+# Packer variables for Proxmox builds
+# Copy this file to packer.pkrvars.hcl and fill in your values
+
+proxmox_endpoint = "https://your-proxmox-ip:8006/api2/json"
+proxmox_username = "root@pam"
+proxmox_password = "your-password"
+proxmox_node     = "your-node-name"
+ssh_username     = "ubuntu"
+ssh_password     = "ubuntu"

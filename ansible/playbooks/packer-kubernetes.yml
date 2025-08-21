@@ -1,0 +1,117 @@
+---
+- name: Install Kubernetes tools for Packer template
+  hosts: localhost
+  connection: local
+  become: yes
+  vars:
+    ansible_user: "{{ ansible_user | default('ubuntu') }}"
+    k8s_version: "1.28"
+
+  tasks:
+    - name: Add Kubernetes GPG key
+      apt_key:
+        url: "https://pkgs.k8s.io/core:/stable:/v{{ k8s_version }}/deb/Release.key"
+        keyring: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+        state: present
+
+    - name: Add Kubernetes repository
+      apt_repository:
+        repo: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v{{ k8s_version }}/deb/ /"
+        state: present
+        update_cache: yes
+
+    - name: Install Kubernetes packages
+      apt:
+        name:
+          - kubelet
+          - kubeadm
+          - kubectl
+        state: present
+
+    - name: Hold Kubernetes packages
+      dpkg_selections:
+        name: "{{ item }}"
+        selection: hold
+      loop:
+        - kubelet
+        - kubeadm
+        - kubectl
+
+    - name: Enable kubelet service
+      systemd:
+        name: kubelet
+        enabled: yes
+
+    - name: Configure containerd for Kubernetes
+      shell: |
+        mkdir -p /etc/containerd
+        containerd config default > /etc/containerd/config.toml
+        sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+      args:
+        creates: /etc/containerd/config.toml
+
+    - name: Enable containerd service
+      systemd:
+        name: containerd
+        enabled: yes
+        state: started
+
+    - name: Install crictl
+      get_url:
+        url: "https://github.com/kubernetes-sigs/cri-tools/releases/download/v{{ k8s_version }}.0/crictl-v{{ k8s_version }}.0-linux-amd64.tar.gz"
+        dest: /tmp/crictl.tar.gz
+
+    - name: Extract crictl
+      unarchive:
+        src: /tmp/crictl.tar.gz
+        dest: /usr/local/bin
+        remote_src: yes
+        mode: '0755'
+
+    - name: Configure crictl
+      copy:
+        content: |
+          runtime-endpoint: unix:///run/containerd/containerd.sock
+          image-endpoint: unix:///run/containerd/containerd.sock
+          timeout: 2
+          debug: false
+          pull-image-on-create: false
+        dest: /etc/crictl.yaml
+        mode: '0644'
+
+    - name: Add Helm GPG key
+      apt_key:
+        url: https://baltocdn.com/helm/signing.asc
+        keyring: /usr/share/keyrings/helm.gpg
+        state: present
+
+    - name: Add Helm repository
+      apt_repository:
+        repo: "deb [arch={{ ansible_architecture }} signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main"
+        state: present
+        update_cache: yes
+
+    - name: Install Helm
+      apt:
+        name: helm
+        state: present
+
+    - name: Install k9s
+      get_url:
+        url: "https://github.com/derailed/k9s/releases/latest/download/k9s_Linux_amd64.tar.gz"
+        dest: /tmp/k9s.tar.gz
+
+    - name: Extract k9s
+      unarchive:
+        src: /tmp/k9s.tar.gz
+        dest: /usr/local/bin
+        remote_src: yes
+        mode: '0755'
+
+    - name: Clean up downloaded files
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/crictl.tar.gz
+        - /tmp/k9s.tar.gz
