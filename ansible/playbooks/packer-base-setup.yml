@@ -5,20 +5,35 @@
   become: yes
   vars:
     ansible_user: "{{ ansible_user | default('ubuntu') }}"
+    os_family: "{{ os_family | default('ubuntu') }}"
+    os_version: "{{ os_version | default('22.04') }}"
   
   tasks:
-    - name: Update apt cache
+    - name: Update package cache (Debian/Ubuntu)
       apt:
         update_cache: yes
         cache_valid_time: 3600
+      when: os_family in ['ubuntu', 'debian']
 
-    - name: Upgrade all packages
+    - name: Update package cache (RedHat/Rocky)
+      dnf:
+        update_cache: yes
+      when: os_family == 'redhat'
+
+    - name: Upgrade all packages (Debian/Ubuntu)
       apt:
         upgrade: dist
         autoremove: yes
         autoclean: yes
+      when: os_family in ['ubuntu', 'debian']
 
-    - name: Install essential packages
+    - name: Upgrade all packages (RedHat/Rocky)
+      dnf:
+        name: "*"
+        state: latest
+      when: os_family == 'redhat'
+
+    - name: Install essential packages (Debian/Ubuntu)
       apt:
         name:
           - qemu-guest-agent
@@ -44,6 +59,32 @@
           - gnupg
           - lsb-release
         state: present
+      when: os_family in ['ubuntu', 'debian']
+
+    - name: Install essential packages (RedHat/Rocky)
+      dnf:
+        name:
+          - qemu-guest-agent
+          - cloud-init
+          - curl
+          - wget
+          - vim
+          - git
+          - htop
+          - tree
+          - jq
+          - unzip
+          - net-tools
+          - bind-utils
+          - tcpdump
+          - nmap
+          - fail2ban
+          - firewalld
+          - python3-pip
+          - ca-certificates
+          - gnupg2
+        state: present
+      when: os_family == 'redhat'
 
     - name: Enable qemu-guest-agent service
       systemd:
@@ -51,16 +92,33 @@
         enabled: yes
         state: started
 
-    - name: Configure UFW firewall
-      ufw:
-        state: enabled
-        policy: deny
-        direction: incoming
+    - name: Configure UFW firewall (Debian/Ubuntu)
+      block:
+        - name: Enable UFW
+          ufw:
+            state: enabled
+            policy: deny
+            direction: incoming
+        - name: Allow SSH through UFW
+          ufw:
+            rule: allow
+            name: OpenSSH
+      when: os_family in ['ubuntu', 'debian']
 
-    - name: Allow SSH through UFW
-      ufw:
-        rule: allow
-        name: OpenSSH
+    - name: Configure firewalld (RedHat/Rocky)
+      block:
+        - name: Enable firewalld
+          systemd:
+            name: firewalld
+            enabled: yes
+            state: started
+        - name: Allow SSH through firewalld
+          firewalld:
+            service: ssh
+            permanent: yes
+            state: enabled
+            immediate: yes
+      when: os_family == 'redhat'
 
     - name: Enable fail2ban service
       systemd:
@@ -68,7 +126,7 @@
         enabled: yes
         state: started
 
-    - name: Configure automatic security updates
+    - name: Configure automatic security updates (Debian/Ubuntu)
       copy:
         content: |
           APT::Periodic::Update-Package-Lists "1";
@@ -77,6 +135,27 @@
           APT::Periodic::Unattended-Upgrade "1";
         dest: /etc/apt/apt.conf.d/20auto-upgrades
         mode: '0644'
+      when: os_family in ['ubuntu', 'debian']
+
+    - name: Configure automatic security updates (RedHat/Rocky)
+      dnf:
+        name: dnf-automatic
+        state: present
+      when: os_family == 'redhat'
+
+    - name: Configure dnf-automatic (RedHat/Rocky)
+      lineinfile:
+        path: /etc/dnf/automatic.conf
+        regexp: '^apply_updates'
+        line: 'apply_updates = yes'
+      when: os_family == 'redhat'
+
+    - name: Enable dnf-automatic timer (RedHat/Rocky)
+      systemd:
+        name: dnf-automatic.timer
+        enabled: yes
+        state: started
+      when: os_family == 'redhat'
 
     - name: Set timezone to UTC
       timezone:

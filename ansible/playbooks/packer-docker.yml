@@ -5,29 +5,53 @@
   become: yes
   vars:
     ansible_user: "{{ ansible_user | default('ubuntu') }}"
+    os_family: "{{ os_family | default('ubuntu') }}"
 
   tasks:
-    - name: Add Docker GPG key
-      apt_key:
-        url: https://download.docker.com/linux/ubuntu/gpg
-        keyring: /etc/apt/keyrings/docker.gpg
-        state: present
+    # Docker installation for Debian/Ubuntu
+    - name: Docker installation (Debian/Ubuntu)
+      block:
+        - name: Add Docker GPG key
+          apt_key:
+            url: https://download.docker.com/linux/ubuntu/gpg
+            keyring: /etc/apt/keyrings/docker.gpg
+            state: present
 
-    - name: Add Docker repository
-      apt_repository:
-        repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
-        state: present
-        update_cache: yes
+        - name: Add Docker repository
+          apt_repository:
+            repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+            state: present
+            update_cache: yes
 
-    - name: Install Docker packages
-      apt:
-        name:
-          - docker-ce
-          - docker-ce-cli
-          - containerd.io
-          - docker-buildx-plugin
-          - docker-compose-plugin
-        state: present
+        - name: Install Docker packages
+          apt:
+            name:
+              - docker-ce
+              - docker-ce-cli
+              - containerd.io
+              - docker-buildx-plugin
+              - docker-compose-plugin
+            state: present
+      when: os_family in ['ubuntu', 'debian']
+
+    # Docker installation for RedHat/Rocky
+    - name: Docker installation (RedHat/Rocky)
+      block:
+        - name: Add Docker repository
+          get_url:
+            url: https://download.docker.com/linux/rhel/docker-ce.repo
+            dest: /etc/yum.repos.d/docker-ce.repo
+
+        - name: Install Docker packages
+          dnf:
+            name:
+              - docker-ce
+              - docker-ce-cli
+              - containerd.io
+              - docker-buildx-plugin
+              - docker-compose-plugin
+            state: present
+      when: os_family == 'redhat'
 
     - name: Add user to docker group
       user:
