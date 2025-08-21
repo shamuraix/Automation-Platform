@@ -1,18 +1,20 @@
+# Ubuntu 22.04 LTS Template with Ansible provisioning
+
+# Packer configuration
 packer {
-  required_version = ">= 1.10.0"
   required_plugins {
     proxmox = {
-      version = ">= 1.1.8"
       source  = "github.com/hashicorp/proxmox"
+      version = "~> 1.2.3"
     }
     ansible = {
-      version = ">= 1.1.0"
       source  = "github.com/hashicorp/ansible"
+      version = "~> 1.1.4"
     }
   }
 }
 
-# Variables for Packer builds
+# Variable declarations
 variable "proxmox_endpoint" {
   type        = string
   description = "Proxmox API endpoint"
@@ -38,23 +40,30 @@ variable "proxmox_node" {
 variable "ssh_username" {
   type        = string
   description = "SSH username for template"
-  default     = "debian"
+  default     = "user"
 }
 
 variable "ssh_password" {
   type        = string
   description = "SSH password for template"
-  default     = "debian"
+  default     = "user"
   sensitive   = true
 }
 
 # Local variables
 locals {
   timestamp = regex_replace(timestamp(), "[- TZ:]", "")
+  # Calculate paths relative to project root
+  project_root = "${path.root}/../../../../../"
+  http_dir = "${local.project_root}http"
+  ansible_playbooks = "${local.project_root}ansible/playbooks"
+  # Template naming
+  template_name = "ubuntu-22.04-ansible-template-${local.timestamp}"
+  os_family = "ubuntu"
+  os_version = "22.04"
 }
 
-# Debian 13 (Trixie) Template with Ansible provisioning
-source "proxmox-iso" "debian-13-ansible" {
+source "proxmox-iso" "ubuntu-22-04-ansible" {
   # Proxmox connection
   proxmox_url              = var.proxmox_endpoint
   username                 = var.proxmox_username
@@ -63,13 +72,15 @@ source "proxmox-iso" "debian-13-ansible" {
   insecure_skip_tls_verify = true
 
   # VM configuration
-  vm_name              = "debian-13-ansible-template-${local.timestamp}"
-  template_description = "Debian 13 (Trixie) template with Ansible provisioning built on ${timestamp()}"
+  vm_name              = local.template_name
+  template_description = "Ubuntu ${local.os_version} LTS template with Ansible provisioning built on ${timestamp()}"
   
-  # ISO configuration - Note: Debian 13 may still be in testing
-  iso_url          = "https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-13.0.0-amd64-netinst.iso"
-  iso_checksum     = "sha256:placeholder_checksum_for_debian_13"
-  iso_storage_pool = "local"
+  # Boot ISO configuration
+  boot_iso {
+    iso_url          = "https://releases.ubuntu.com/22.04/ubuntu-22.04.4-live-server-amd64.iso"
+    iso_checksum     = "sha256:45f873de9f8cb637345d6e66a583762730bbea30277ef7b32c9c3bd6700a32b2"
+    iso_storage_pool = "local"
+  }
   
   # Hardware configuration
   cores    = 2
@@ -96,94 +107,82 @@ source "proxmox-iso" "debian-13-ansible" {
   cloud_init              = true
   cloud_init_storage_pool = "local-lvm"
   
-  # Boot configuration for Debian preseed
+  # Boot configuration
   boot_command = [
     "<esc><wait>",
-    "install <wait>",
-    "preseed/url=http://{{ .HTTPIP }}:{{ .HTTPPort }}/preseed.cfg <wait>",
-    "debian-installer=en_US.UTF-8 <wait>",
-    "auto <wait>",
-    "locale=en_US.UTF-8 <wait>",
-    "kbd-chooser/method=us <wait>",
-    "keyboard-configuration/xkb-keymap=us <wait>",
-    "netcfg/get_hostname=debian13 <wait>",
-    "netcfg/get_domain=local <wait>",
-    "fb=false <wait>",
-    "debconf/frontend=noninteractive <wait>",
-    "console-setup/ask_detect=false <wait>",
-    "console-keymaps-at/keymap=us <wait>",
-    "grub-installer/bootdev=/dev/sda <wait>",
-    "<enter><wait>"
+    "e<wait>",
+    "<down><down><down><end>",
+    "<bs><bs><bs><bs><wait>",
+    "autoinstall ds=nocloud-net\\;s=http://{{ .HTTPIP }}:{{ .HTTPPort }}/ ---<wait>",
+    "<f10><wait>"
   ]
-  boot_wait = "10s"
+  boot_wait = "5s"
   
-  # HTTP server for preseed
-  http_directory = "packer/http/debian"
+  # HTTP server for autoinstall
+  http_directory = local.http_dir
   
   # SSH configuration
   ssh_username = var.ssh_username
   ssh_password = var.ssh_password
   ssh_timeout  = "20m"
-  
-  # Shutdown configuration
-  shutdown_command = "echo '${var.ssh_password}' | sudo -S shutdown -P now"
 }
 
 # Build configuration with Ansible
 build {
-  name = "debian-13-ansible-template"
-  sources = ["source.proxmox-iso.debian-13-ansible"]
+  name = "ubuntu-22-04-lts"
+  sources = ["source.proxmox-iso.ubuntu-22-04-ansible"]
 
-  # Wait for system to be ready
+  # Wait for cloud-init to complete
   provisioner "shell" {
-    pause_before = "30s"
     inline = [
+      "while [ ! -f /var/lib/cloud/instance/boot-finished ]; do echo 'Waiting for cloud-init...'; sleep 1; done",
       "sudo apt-get update",
-      "sudo apt-get install -y python3 python3-pip python3-venv",
-      "sudo python3 -m pip install --upgrade pip --break-system-packages"
+      "sudo apt-get install -y python3 python3-pip",
+      "sudo python3 -m pip install --upgrade pip"
     ]
   }
 
-  # Install Ansible
+  # Install Ansible on the target for local provisioning
   provisioner "shell" {
     inline = [
       "sudo apt-get install -y software-properties-common",
+      "sudo add-apt-repository --yes --update ppa:ansible/ansible",
       "sudo apt-get install -y ansible"
     ]
   }
 
   # Basic system configuration with Ansible
   provisioner "ansible-local" {
-    playbook_file = "../ansible/playbooks/packer-base-setup.yml"
+    playbook_file = "${local.ansible_playbooks}/packer-base-setup.yml"
     extra_arguments = [
       "--extra-vars", "ansible_user=${var.ssh_username}",
-      "--extra-vars", "os_family=debian",
-      "--extra-vars", "os_version=13",
+      "--extra-vars", "os_family=${local.os_family}",
+      "--extra-vars", "os_version=${local.os_version}",
       "-v"
     ]
   }
 
   # Install Docker with Ansible
   provisioner "ansible-local" {
-    playbook_file = "../ansible/playbooks/packer-docker.yml"
+    playbook_file = "${local.ansible_playbooks}/packer-docker.yml"
     extra_arguments = [
       "--extra-vars", "ansible_user=${var.ssh_username}",
-      "--extra-vars", "os_family=debian",
+      "--extra-vars", "os_family=${local.os_family}",
       "-v"
     ]
   }
 
   # Install Kubernetes tools with Ansible
   provisioner "ansible-local" {
-    playbook_file = "../ansible/playbooks/packer-kubernetes.yml"
+    playbook_file = "${local.ansible_playbooks}/packer-kubernetes.yml"
     extra_arguments = [
       "--extra-vars", "ansible_user=${var.ssh_username}",
-      "--extra-vars", "os_family=debian",
+      "--extra-vars", "os_family=${local.os_family}",
       "-v"
     ]
   }
 
-  # Final cleanup
+  # Final cleanup with shell script (minimal cleanup only)
   provisioner "shell" {
     inline = [
       # Clear logs
@@ -194,10 +193,9 @@ build {
       # Clear bash history
       "history -c",
       "sudo rm -f /root/.bash_history",
-      "sudo rm -f /home/${var.ssh_username}/.bash_history",
-      # Clear apt cache
-      "sudo apt-get clean",
-      "sudo apt-get autoremove -y",
+      "sudo rm -f /home/ubuntu/.bash_history",
+      # Clear cloud-init state
+      "sudo cloud-init clean --logs",
       # Final sync
       "sync"
     ]

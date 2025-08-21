@@ -1,18 +1,20 @@
+# Debian 13 LTS Template with Ansible provisioning
+
+# Packer configuration
 packer {
-  required_version = ">= 1.10.0"
   required_plugins {
     proxmox = {
-      version = ">= 1.1.8"
       source  = "github.com/hashicorp/proxmox"
+      version = "~> 1.2.3"
     }
     ansible = {
-      version = ">= 1.1.0"
       source  = "github.com/hashicorp/ansible"
+      version = "~> 1.1.4"
     }
   }
 }
 
-# Variables for Packer builds
+# Variable declarations
 variable "proxmox_endpoint" {
   type        = string
   description = "Proxmox API endpoint"
@@ -38,23 +40,30 @@ variable "proxmox_node" {
 variable "ssh_username" {
   type        = string
   description = "SSH username for template"
-  default     = "rocky"
+  default     = "user"
 }
 
 variable "ssh_password" {
   type        = string
   description = "SSH password for template"
-  default     = "rocky"
+  default     = "user"
   sensitive   = true
 }
 
 # Local variables
 locals {
   timestamp = regex_replace(timestamp(), "[- TZ:]", "")
+  # Calculate paths relative to project root
+  project_root = "${path.root}/../../../../../"
+  http_dir = "${local.project_root}http"
+  ansible_playbooks = "${local.project_root}ansible/playbooks"
+  # Template naming
+  template_name = "debian-13-ansible-template-${local.timestamp}"
+  os_family = "debian"
+  os_version = "13"
 }
 
-# Rocky Linux 10 Template with Ansible provisioning
-source "proxmox-iso" "rocky-10-ansible" {
+source "proxmox-iso" "debian-13-ansible" {
   # Proxmox connection
   proxmox_url              = var.proxmox_endpoint
   username                 = var.proxmox_username
@@ -63,13 +72,15 @@ source "proxmox-iso" "rocky-10-ansible" {
   insecure_skip_tls_verify = true
 
   # VM configuration
-  vm_name              = "rocky-10-ansible-template-${local.timestamp}"
-  template_description = "Rocky Linux 10 template with Ansible provisioning built on ${timestamp()}"
+  vm_name              = local.template_name
+  template_description = "Debian ${local.os_version} LTS template with Ansible provisioning built on ${timestamp()}"
   
-  # ISO configuration - Note: Rocky 10 may not be released yet, using placeholder
-  iso_url          = "https://download.rockylinux.org/pub/rocky/10/isos/x86_64/Rocky-10.0-x86_64-minimal.iso"
-  iso_checksum     = "sha256:placeholder_checksum_for_rocky_10"
-  iso_storage_pool = "local"
+  # Boot ISO configuration
+  boot_iso {
+    iso_url          = "https://releases.debian.com/13/debian-13.4-live-server-amd64.iso"
+    iso_checksum     = "sha256:45f873de9f8cb637345d6e66a583762730bbea30277ef7b32c9c3bd6700a32b2"
+    iso_storage_pool = "local"
+  }
   
   # Hardware configuration
   cores    = 2
@@ -96,81 +107,82 @@ source "proxmox-iso" "rocky-10-ansible" {
   cloud_init              = true
   cloud_init_storage_pool = "local-lvm"
   
-  # Boot configuration for Rocky Linux
+  # Boot configuration
   boot_command = [
-    "<tab><wait>",
-    " inst.text inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/rocky-ks.cfg",
-    "<enter><wait>"
+    "<esc><wait>",
+    "e<wait>",
+    "<down><down><down><end>",
+    "<bs><bs><bs><bs><wait>",
+    "auto url=\\;s=http://{{ .HTTPIP }}:{{ .HTTPPort }}/ ---<wait>",
+    "<f10><wait>"
   ]
-  boot_wait = "10s"
+  boot_wait = "5s"
   
-  # HTTP server for kickstart
-  http_directory = "packer/http/rocky"
+  # HTTP server for autoinstall
+  http_directory = local.http_dir
   
   # SSH configuration
   ssh_username = var.ssh_username
   ssh_password = var.ssh_password
   ssh_timeout  = "20m"
-  
-  # Shutdown configuration
-  shutdown_command = "echo '${var.ssh_password}' | sudo -S shutdown -P now"
 }
 
 # Build configuration with Ansible
 build {
-  name = "rocky-10-ansible-template"
-  sources = ["source.proxmox-iso.rocky-10-ansible"]
+  name = "debian-13-lts"
+  sources = ["source.proxmox-iso.debian-13-ansible"]
 
-  # Wait for system to be ready
+  # Wait for cloud-init to complete
   provisioner "shell" {
-    pause_before = "30s"
     inline = [
-      "sudo dnf update -y",
-      "sudo dnf install -y python3 python3-pip",
+      "while [ ! -f /var/lib/cloud/instance/boot-finished ]; do echo 'Waiting for cloud-init...'; sleep 1; done",
+      "sudo apt-get update",
+      "sudo apt-get install -y python3 python3-pip",
       "sudo python3 -m pip install --upgrade pip"
     ]
   }
 
-  # Install Ansible
+  # Install Ansible on the target for local provisioning
   provisioner "shell" {
     inline = [
-      "sudo dnf install -y epel-release",
-      "sudo dnf install -y ansible"
+      "sudo apt-get install -y software-properties-common",
+      "sudo add-apt-repository --yes --update ppa:ansible/ansible",
+      "sudo apt-get install -y ansible"
     ]
   }
 
   # Basic system configuration with Ansible
   provisioner "ansible-local" {
-    playbook_file = "../ansible/playbooks/packer-base-setup.yml"
+    playbook_file = "${local.ansible_playbooks}/packer-base-setup.yml"
     extra_arguments = [
       "--extra-vars", "ansible_user=${var.ssh_username}",
-      "--extra-vars", "os_family=redhat",
-      "--extra-vars", "os_version=10",
+      "--extra-vars", "os_family=${local.os_family}",
+      "--extra-vars", "os_version=${local.os_version}",
       "-v"
     ]
   }
 
   # Install Docker with Ansible
   provisioner "ansible-local" {
-    playbook_file = "../ansible/playbooks/packer-docker.yml"
+    playbook_file = "${local.ansible_playbooks}/packer-docker.yml"
     extra_arguments = [
       "--extra-vars", "ansible_user=${var.ssh_username}",
-      "--extra-vars", "os_family=redhat",
+      "--extra-vars", "os_family=${local.os_family}",
       "-v"
     ]
   }
 
   # Install Kubernetes tools with Ansible
   provisioner "ansible-local" {
-    playbook_file = "../ansible/playbooks/packer-kubernetes.yml"
+    playbook_file = "${local.ansible_playbooks}/packer-kubernetes.yml"
     extra_arguments = [
       "--extra-vars", "ansible_user=${var.ssh_username}",
-      "--extra-vars", "os_family=redhat",
+      "--extra-vars", "os_family=${local.os_family}",
       "-v"
     ]
   }
 
-  # Final cleanup
+  # Final cleanup with shell script (minimal cleanup only)
   provisioner "shell" {
     inline = [
       # Clear logs
@@ -181,9 +193,9 @@ build {
       # Clear bash history
       "history -c",
       "sudo rm -f /root/.bash_history",
-      "sudo rm -f /home/${var.ssh_username}/.bash_history",
-      # Clear DNF cache
-      "sudo dnf clean all",
+      "sudo rm -f /home/debian/.bash_history",
+      # Clear cloud-init state
+      "sudo cloud-init clean --logs",
       # Final sync
       "sync"
     ]

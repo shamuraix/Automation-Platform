@@ -1,18 +1,20 @@
+# Ubuntu 24.04.3 LTS Template with Ansible provisioning
+
+# Packer configuration
 packer {
-  required_version = ">= 1.10.0"
   required_plugins {
     proxmox = {
-      version = ">= 1.1.8"
       source  = "github.com/hashicorp/proxmox"
+      version = "~> 1.2.3"
     }
     ansible = {
-      version = ">= 1.1.0"
       source  = "github.com/hashicorp/ansible"
+      version = "~> 1.1.4"
     }
   }
 }
 
-# Variables for Packer builds
+# Variable declarations
 variable "proxmox_endpoint" {
   type        = string
   description = "Proxmox API endpoint"
@@ -38,22 +40,29 @@ variable "proxmox_node" {
 variable "ssh_username" {
   type        = string
   description = "SSH username for template"
-  default     = "ubuntu"
+  default     = "user"
 }
 
 variable "ssh_password" {
   type        = string
   description = "SSH password for template"
-  default     = "ubuntu"
+  default     = "user"
   sensitive   = true
 }
 
 # Local variables
 locals {
   timestamp = regex_replace(timestamp(), "[- TZ:]", "")
+  # Calculate paths relative to project root
+  project_root = "${path.root}/../../../../../"
+  http_dir = "${local.project_root}http/ubuntu"
+  ansible_playbooks = "${local.project_root}ansible/playbooks"
+  # Template naming
+  template_name = "ubuntu-24.04.3-ansible-template-${local.timestamp}"
+  os_family = "ubuntu"
+  os_version = "24.04.3"
 }
 
-# Ubuntu 24.04.3 LTS Template with Ansible provisioning
 source "proxmox-iso" "ubuntu-24-04-3-ansible" {
   # Proxmox connection
   proxmox_url              = var.proxmox_endpoint
@@ -63,13 +72,15 @@ source "proxmox-iso" "ubuntu-24-04-3-ansible" {
   insecure_skip_tls_verify = true
 
   # VM configuration
-  vm_name              = "ubuntu-24.04.3-ansible-template-${local.timestamp}"
-  template_description = "Ubuntu 24.04.3 LTS template with Ansible provisioning built on ${timestamp()}"
+  vm_name              = local.template_name
+  template_description = "Ubuntu ${local.os_version} LTS template with Ansible provisioning built on ${timestamp()}"
   
-  # ISO configuration
-  iso_url          = "https://releases.ubuntu.com/24.04.3/ubuntu-24.04.3-live-server-amd64.iso"
-  iso_checksum     = "sha256:8c3e4f9b7e8e2d0b5c4a1f9e8d7c6b5a4e3f2d1c9b8a7e6f5d4c3b2a1e9f8d7c6"
-  iso_storage_pool = "local"
+  # Boot ISO configuration
+  boot_iso {
+    iso_url          = "https://releases.ubuntu.com/24.04.3/ubuntu-24.04.3-live-server-amd64.iso"
+    iso_checksum     = "sha256:a435f6f393dda581172490eda9f683c32e495158a780b5a1de422ee77d98e909"
+    iso_storage_pool = "local"
+  }
   
   # Hardware configuration
   cores    = 2
@@ -107,21 +118,18 @@ source "proxmox-iso" "ubuntu-24-04-3-ansible" {
   ]
   boot_wait = "5s"
   
-  # HTTP server for autoinstall
-  http_directory = "packer/http/ubuntu"
+  # HTTP server configuration
+  http_directory = local.http_dir
   
   # SSH configuration
   ssh_username = var.ssh_username
   ssh_password = var.ssh_password
   ssh_timeout  = "20m"
-  
-  # Shutdown configuration
-  shutdown_command = "echo '${var.ssh_password}' | sudo -S shutdown -P now"
 }
 
 # Build configuration with Ansible
 build {
-  name = "ubuntu-24-04-3-ansible-template"
+  name = "ubuntu-24-04-3-lts"
   sources = ["source.proxmox-iso.ubuntu-24-04-3-ansible"]
 
   # Wait for cloud-init to complete
@@ -145,28 +153,28 @@ build {
 
   # Basic system configuration with Ansible
   provisioner "ansible-local" {
-    playbook_file = "../ansible/playbooks/packer-base-setup.yml"
+    playbook_file = "${local.ansible_playbooks}/packer-base-setup.yml"
     extra_arguments = [
       "--extra-vars", "ansible_user=${var.ssh_username}",
-      "--extra-vars", "os_family=ubuntu",
-      "--extra-vars", "os_version=24.04",
+      "--extra-vars", "os_family=${local.os_family}",
+      "--extra-vars", "os_version=${local.os_version}",
       "-v"
     ]
   }
 
   # Install Docker with Ansible
   provisioner "ansible-local" {
-    playbook_file = "../ansible/playbooks/packer-docker.yml"
+    playbook_file = "${local.ansible_playbooks}/packer-docker.yml"
     extra_arguments = [
       "--extra-vars", "ansible_user=${var.ssh_username}",
-      "--extra-vars", "os_family=ubuntu",
+      "--extra-vars", "os_family=${local.os_family}",
       "-v"
     ]
   }
 
   # Install Kubernetes tools with Ansible
   provisioner "ansible-local" {
-    playbook_file = "../ansible/playbooks/packer-kubernetes.yml"
+    playbook_file = "${local.ansible_playbooks}/packer-kubernetes.yml"
     extra_arguments = [
       "--extra-vars", "ansible_user=${var.ssh_username}",
       "--extra-vars", "os_family=ubuntu",

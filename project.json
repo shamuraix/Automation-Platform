@@ -1,0 +1,177 @@
+{
+  "project": {
+    "name": "Automation Platform",
+    "description": "Infrastructure automation platform using Packer, OpenTofu, and Ansible",
+    "version": "1.0.0"
+  },
+  "directories": {
+    "packer": "packer",
+    "opentofu": "opentofu",
+    "ansible": "ansible"
+  },
+  "required_tools": [
+    {
+      "name": "packer",
+      "command": "packer",
+      "install_command": "sudo apt-get install -y packer",
+      "description": "HashiCorp Packer for building VM templates"
+    },
+    {
+      "name": "opentofu",
+      "command": "tofu", 
+      "install_command": "curl -fsSL https://get.opentofu.org/install.sh | sh",
+      "description": "OpenTofu for infrastructure as code"
+    },
+    {
+      "name": "ansible",
+      "command": "ansible-playbook",
+      "install_command": "sudo apt-get update && sudo apt-get install -y ansible",
+      "description": "Ansible for configuration management"
+    }
+  ],
+  "config_files": {
+    "packer_vars": {
+      "path": "packer/packer.pkrvars.hcl",
+      "example": "packer/packer.pkrvars.hcl.example",
+      "description": "Packer variables for Proxmox builds"
+    },
+    "packer_shared": {
+      "path": "packer/variables.pkr.hcl",
+      "description": "Shared Packer variables and configuration"
+    },
+    "terraform_vars": {
+      "path": "opentofu/terraform.tfvars",
+      "example": "opentofu/terraform.tfvars.example", 
+      "description": "OpenTofu variables for infrastructure deployment"
+    }
+  },
+  "templates": [
+    {
+      "id": 1,
+      "key": "ubuntu-22.04",
+      "name": "Ubuntu 22.04 LTS",
+      "description": "Ubuntu 22.04 LTS with Ansible",
+      "file": "packer/builds/linux/ubuntu/22.04/template.pkr.hcl",
+      "os": "ubuntu",
+      "version": "22.04"
+    },
+    {
+      "id": 2,
+      "key": "ubuntu-24.04.3",
+      "name": "Ubuntu 24.04.3 LTS",
+      "description": "Ubuntu 24.04.3 LTS with Ansible",
+      "file": "packer/builds/linux/ubuntu/24.04.3/template.pkr.hcl",
+      "os": "ubuntu",
+      "version": "24.04.3"
+    },
+    {
+      "id": 3,
+      "key": "rocky-10",
+      "name": "Rocky Linux 10",
+      "description": "Rocky Linux 10 with Ansible",
+      "file": "packer/builds/linux/rocky/10/template.pkr.hcl",
+      "os": "rocky",
+      "version": "10"
+    },
+    {
+      "id": 4,
+      "key": "debian-13",
+      "name": "Debian 13 (Trixie)",
+      "description": "Debian 13 (Trixie) with Ansible",
+      "file": "packer/builds/linux/debian/13/template.pkr.hcl",
+      "os": "debian",
+      "version": "13"
+    }
+  ],
+  "menu_options": {
+    "main": [
+      {
+        "id": 1,
+        "title": "Check Prerequisites",
+        "description": "Verify that all required tools are installed",
+        "function": "check_prerequisites"
+      },
+      {
+        "id": 2,
+        "title": "Build Packer Template",
+        "description": "Build VM templates using Packer",
+        "function": "build_template"
+      },
+      {
+        "id": 3,
+        "title": "Deploy Infrastructure",
+        "description": "Deploy infrastructure using OpenTofu",
+        "function": "deploy_infrastructure"
+      },
+      {
+        "id": 4,
+        "title": "Show Status",
+        "description": "Show current infrastructure status",
+        "function": "show_status"
+      },
+      {
+        "id": 5,
+        "title": "Destroy Infrastructure",
+        "description": "Destroy all managed infrastructure",
+        "function": "destroy_infrastructure"
+      },
+      {
+        "id": 6,
+        "title": "Exit",
+        "description": "Exit the deployment script",
+        "function": "exit"
+      }
+    ],
+    "templates": [
+      {
+        "id": 7,
+        "title": "Build All Templates",
+        "description": "Build all available templates",
+        "function": "build_all_templates"
+      },
+      {
+        "id": 8,
+        "title": "Exit",
+        "description": "Exit the template builder",
+        "function": "exit"
+      }
+    ]
+  },
+  "messages": {
+    "welcome": "Automation Platform Deployment Script",
+    "template_welcome": "Packer Template Builder with Ansible Provisioning",
+    "goodbye": "Goodbye!",
+    "continue": "Press Enter to continue...",
+    "select_option": "Please select an option",
+    "select_template": "Please select a template to build",
+    "invalid_option": "Invalid option. Please select a valid choice.",
+    "prerequisites_satisfied": "✅ All prerequisites are satisfied",
+    "validation_successful": "✅ Validation successful",
+    "build_successful": "✅ build completed successfully!",
+    "build_failed": "❌ build failed",
+    "all_builds_successful": "🎉 All templates built successfully!",
+    "some_builds_failed": "⚠️  Some templates failed to build",
+    "validation_warnings": "⚠️ Validation warnings detected, but continuing with build..."
+  },
+  "prompts": {
+    "deploy_confirm": "Do you want to apply these changes? (y/N): ",
+    "destroy_confirm": "Are you sure you want to continue? (y/N): ",
+    "destroy_warning": "This will destroy ALL infrastructure managed by this configuration!"
+  },
+  "post_build_instructions": [
+    "Update your opentofu/terraform.tfvars with the new template name",
+    "cd opentofu && tofu init to download providers", 
+    "tofu plan && tofu apply to deploy infrastructure",
+    "Ansible will automatically configure your VMs post-deployment"
+  ],
+  "commands": {
+    "packer_init": "packer init {packer_dir}/",
+    "packer_validate": "packer validate -var-file={packer_dir}/packer.pkrvars.hcl {packer_dir}/",
+    "packer_build": "packer build -var-file={packer_dir}/packer.pkrvars.hcl {packer_dir}/",
+    "tofu_init": "tofu init",
+    "tofu_plan": "tofu plan",
+    "tofu_apply": "tofu apply",
+    "tofu_destroy": "tofu destroy",
+    "tofu_show": "tofu show"
+  }
+}
