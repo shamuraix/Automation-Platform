@@ -1,4 +1,4 @@
-# Ubuntu 22.04 LTS Template with Ansible provisioning
+# Rocky Linux 10 Template with Ansible provisioning
 
 # Packer configuration
 packer {
@@ -55,15 +55,15 @@ locals {
   timestamp = regex_replace(timestamp(), "[- TZ:]", "")
   # Calculate paths relative to project root
   project_root = "${path.root}/../../../../../"
-  http_dir = "${local.project_root}http"
+    http_dir = "${local.project_root}http/rocky"
   ansible_playbooks = "${local.project_root}ansible/playbooks"
-  # Template naming
-  template_name = "ubuntu-22.04-ansible-template-${local.timestamp}"
-  os_family = "ubuntu"
-  os_version = "22.04"
+    # Template naming
+  template_name = "rocky-10-ansible-template-${local.timestamp}"
+  os_family = "rocky"
+  os_version = "10"
 }
 
-source "proxmox-iso" "ubuntu-22-04-ansible" {
+source "proxmox-iso" "rocky-10-ansible" {
   # Proxmox connection
   proxmox_url              = var.proxmox_endpoint
   username                 = var.proxmox_username
@@ -73,12 +73,12 @@ source "proxmox-iso" "ubuntu-22-04-ansible" {
 
   # VM configuration
   vm_name              = local.template_name
-  template_description = "Ubuntu ${local.os_version} LTS template with Ansible provisioning built on ${timestamp()}"
+  template_description = "Rocky Linux ${local.os_version} template with Ansible provisioning built on ${timestamp()}"
   
   # Boot ISO configuration
   boot_iso {
-    iso_url          = "https://releases.ubuntu.com/22.04/ubuntu-22.04.4-live-server-amd64.iso"
-    iso_checksum     = "sha256:45f873de9f8cb637345d6e66a583762730bbea30277ef7b32c9c3bd6700a32b2"
+    iso_url          = "https://download.rockylinux.org/pub/rocky/10/isos/x86_64/Rocky-10.0-x86_64-minimal.iso"
+    iso_checksum     = "sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
     iso_storage_pool = "local"
   }
   
@@ -107,18 +107,15 @@ source "proxmox-iso" "ubuntu-22-04-ansible" {
   cloud_init              = true
   cloud_init_storage_pool = "local-lvm"
   
-  # Boot configuration
+  # Boot configuration for kickstart
   boot_command = [
-    "<esc><wait>",
-    "e<wait>",
-    "<down><down><down><end>",
-    "<bs><bs><bs><bs><wait>",
-    "autoinstall ds=nocloud-net\\;s=http://{{ .HTTPIP }}:{{ .HTTPPort }}/ ---<wait>",
-    "<f10><wait>"
+    "<up><wait><tab><wait>",
+    " inst.text inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/rocky-ks.cfg<wait>",
+    "<enter><wait>"
   ]
-  boot_wait = "5s"
+  boot_wait = "10s"
   
-  # HTTP server for autoinstall
+  # HTTP server for kickstart files
   http_directory = local.http_dir
   
   # SSH configuration
@@ -129,15 +126,14 @@ source "proxmox-iso" "ubuntu-22-04-ansible" {
 
 # Build configuration with Ansible
 build {
-  name = "ubuntu-22-04-lts"
-  sources = ["source.proxmox-iso.ubuntu-22-04-ansible"]
+  name = "rocky-10"
+  sources = ["source.proxmox-iso.rocky-10-ansible"]
 
-  # Wait for cloud-init to complete
+  # Wait for installation to complete
   provisioner "shell" {
     inline = [
-      "while [ ! -f /var/lib/cloud/instance/boot-finished ]; do echo 'Waiting for cloud-init...'; sleep 1; done",
-      "sudo apt-get update",
-      "sudo apt-get install -y python3 python3-pip",
+      "sudo dnf update -y",
+      "sudo dnf install -y python3 python3-pip",
       "sudo python3 -m pip install --upgrade pip"
     ]
   }
@@ -145,9 +141,8 @@ build {
   # Install Ansible on the target for local provisioning
   provisioner "shell" {
     inline = [
-      "sudo apt-get install -y software-properties-common",
-      "sudo add-apt-repository --yes --update ppa:ansible/ansible",
-      "sudo apt-get install -y ansible"
+      "sudo dnf install -y epel-release",
+      "sudo dnf install -y ansible"
     ]
   }
 
@@ -193,7 +188,7 @@ build {
       # Clear bash history
       "history -c",
       "sudo rm -f /root/.bash_history",
-      "sudo rm -f /home/ubuntu/.bash_history",
+      "sudo rm -f /home/${var.ssh_username}/.bash_history",
       # Clear cloud-init state
       "sudo cloud-init clean --logs",
       # Final sync
