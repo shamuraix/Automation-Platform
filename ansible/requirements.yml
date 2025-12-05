@@ -1,0 +1,14 @@
+---
+# Galaxy requirements for Vault hardening and configuration
+roles:
+  - name: ansible-lockdown.RHEL9-CIS
+  - name: robertdebock.vault
+  - name: robertdebock.vault_configuration
+  # Role dependencies recommended by the robertdebock ecosystem
+  - name: robertdebock.bootstrap
+  - name: robertdebock.core_dependencies
+  - name: robertdebock.update
+
+collections:
+  - name: ansible.posix
+  - name: community.general
