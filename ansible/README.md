@@ -17,6 +17,7 @@ This directory contains Ansible playbooks and configuration for both Packer temp
 ```
 ansible/
 ├── ansible.cfg                    # Ansible configuration
+├── requirements.yml               # Galaxy roles and collections
 ├── inventory/
 │   └── hosts.yml                  # Dynamic inventory for all VMs
 ├── playbooks/
@@ -25,7 +26,8 @@ ansible/
 │   ├── packer-kubernetes.yml      # Kubernetes tools for Packer
 │   ├── k3s-servers.yml            # K3s server configuration
 │   ├── k3s-workers.yml            # K3s worker configuration
-│   └── docker-swarm.yml           # Docker Swarm cluster setup
+│   ├── docker-swarm.yml           # Docker Swarm cluster setup
+│   └── vault-ha.yml               # Hardened Vault installation and config
 ├── templates/
 │   ├── k3s-server-init.service.j2 # K3s initial server service
 │   ├── k3s-server-join.service.j2 # K3s additional server service
@@ -59,6 +61,9 @@ sudo apt-get install -y ansible
 
 # Verify installation
 ansible --version
+
+# Install role and collection dependencies
+ansible-galaxy install -r ansible/requirements.yml
 ```
 
 ### 2. Build Packer Template with Ansible
@@ -167,6 +172,11 @@ resource "ansible_playbook" "k3s_servers" {
 - Manager and worker node joining
 - Token management and security
 - Service mesh configuration
+
+#### `vault-ha.yml`
+- Applies CIS Level 1 hardening for RHEL 9.6 using `ansible-lockdown.RHEL9-CIS`
+- Installs HashiCorp Vault with system-level protections using `robertdebock.vault`
+- Manages TLS assets and generates `vault.hcl` via `robertdebock.vault_configuration` with Raft storage defaults
 
 ## Configuration Management
 

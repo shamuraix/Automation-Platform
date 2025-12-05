@@ -1,0 +1,120 @@
+---
+- name: Hardened Vault deployment on RHEL 9.6
+  hosts: vault_cluster
+  become: true
+  gather_facts: true
+
+  vars:
+    # CIS Level 1 baseline
+    rhel9cis_level_1: true
+    rhel9cis_level_2: false
+    rhel9cis_rule_exceptions: []
+
+    # Vault binary install and system hardening
+    vault_type: oss
+    vault_version: "1.15.4"
+    vault_api_port: 8200
+    vault_cluster_port: 8201
+    vault_data_dir: /opt/vault/data
+    vault_tls_dir: /opt/vault/tls
+    vault_hardening_disable_swap: true
+    vault_hardening_disable_core_dumps: true
+    vault_hardening_disable_shell_command_history: true
+    vault_hardening_configure_selinux_apparmor: true
+
+    # TLS material: provide your own CA, cert, and key via vaulted variables
+    vault_tls_ca_cert: ""
+    vault_tls_cert: ""
+    vault_tls_key: ""
+
+    # vault.hcl configuration
+    vault_configuration_owner: vault
+    vault_configuration_group: vault
+    vault_configuration_disable_mlock: false
+    vault_configuration_ui: true
+    vault_configuration_log_level: info
+    vault_configuration_api_addr: "https://{{ ansible_fqdn }}:{{ vault_api_port }}"
+    vault_configuration_cluster_addr: "https://{{ ansible_fqdn }}:{{ vault_cluster_port }}"
+    vault_configuration_listeners:
+      - type: tcp
+        address: "0.0.0.0:{{ vault_api_port }}"
+        cluster_address: "0.0.0.0:{{ vault_cluster_port }}"
+        tls_disable: false
+        tls_cert_file: "{{ vault_tls_dir }}/vault.crt"
+        tls_key_file: "{{ vault_tls_dir }}/vault.key"
+        tls_client_ca_file: "{{ vault_tls_dir }}/ca.crt"
+        tls_min_version: tls12
+    vault_configuration_storage_raft:
+      path: "{{ vault_data_dir }}"
+      node_id: "{{ inventory_hostname }}"
+      retry_join: "{{ vault_raft_retry_join | default([]) | to_json | from_json }}"
+
+  pre_tasks:
+    - name: Build Raft retry_join targets from inventory
+      set_fact:
+        vault_raft_retry_join: >-
+          {{ (vault_raft_retry_join | default([])) + [
+                {
+                  'leader_api_addr': 'https://' ~ (hostvars[item].ansible_host | default(hostvars[item].ansible_fqdn | default(item))) ~ ':' ~ (vault_api_port | string),
+                  'leader_ca_cert_file': vault_tls_dir ~ '/ca.crt'
+                }
+              ]
+          }}
+      loop: "{{ groups['vault_cluster'] | default([]) }}"
+      when: item != inventory_hostname
+
+  tasks:
+    - name: Apply RHEL 9.6 CIS Level 1 baseline
+      import_role:
+        name: ansible-lockdown.RHEL9-CIS
+      tags: ['cis']
+
+    - name: Install Vault with system hardening
+      import_role:
+        name: robertdebock.vault
+      tags: ['vault', 'install']
+
+    - name: Ensure Vault TLS directory exists
+      file:
+        path: "{{ vault_tls_dir }}"
+        state: directory
+        owner: "{{ vault_configuration_owner }}"
+        group: "{{ vault_configuration_group }}"
+        mode: '0750'
+      tags: ['vault', 'tls']
+
+    - name: Install CA certificate
+      copy:
+        dest: "{{ vault_tls_dir }}/ca.crt"
+        content: "{{ vault_tls_ca_cert }}"
+        owner: "{{ vault_configuration_owner }}"
+        group: "{{ vault_configuration_group }}"
+        mode: '0644'
+      when: vault_tls_ca_cert | length > 0
+      tags: ['vault', 'tls']
+
+    - name: Install server certificate
+      copy:
+        dest: "{{ vault_tls_dir }}/vault.crt"
+        content: "{{ vault_tls_cert }}"
+        owner: "{{ vault_configuration_owner }}"
+        group: "{{ vault_configuration_group }}"
+        mode: '0644'
+      when: vault_tls_cert | length > 0
+      tags: ['vault', 'tls']
+
+    - name: Install server key
+      copy:
+        dest: "{{ vault_tls_dir }}/vault.key"
+        content: "{{ vault_tls_key }}"
+        owner: "{{ vault_configuration_owner }}"
+        group: "{{ vault_configuration_group }}"
+        mode: '0600'
+      when: vault_tls_key | length > 0
+      tags: ['vault', 'tls']
+
+    - name: Configure Vault service
+      import_role:
+        name: robertdebock.vault_configuration
+      tags: ['vault', 'config']
+
