@@ -132,7 +132,7 @@
       delegate_to: localhost
       run_once: true
       when: acme_enabled | bool
-      tags: ['digicert', 'acme', 'tls']
+      tags: ['vault', 'digicert', 'acme', 'tls']
 
     - name: Build Raft retry_join targets from inventory (exclude self)
       ansible.builtin.set_fact:

@@ -15,6 +15,8 @@
     path: "{{ acme_data_dir }}/acme-account.key"
     type: RSA
     size: 2048
+    mode: '0600'
+  no_log: true
   tags: ['digicert', 'acme', 'tls']
 
 - name: Create ACME account with EAB (External Account Binding)
@@ -30,6 +32,7 @@
     contact:
       - "mailto:{{ acme_contact_email }}"
     state: present
+  no_log: true
   tags: ['digicert', 'acme', 'tls']
 
 - name: Generate certificate private key
@@ -37,6 +40,8 @@
     path: "{{ acme_data_dir }}/{{ acme_cert_cn }}.key"
     type: RSA
     size: 2048
+    mode: '0600'
+  no_log: true
   tags: ['digicert', 'acme', 'tls']
 
 - name: Generate Certificate Signing Request (CSR)
