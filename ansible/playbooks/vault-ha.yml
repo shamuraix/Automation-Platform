@@ -1,62 +1,129 @@
 ---
 - name: Hardened Vault deployment on RHEL 9.6
-  hosts: vault_cluster
+  hosts: vault
   become: true
   gather_facts: true
 
   vars:
+    # --------------------------------------------------
     # CIS Level 1 baseline
+    # --------------------------------------------------
     rhel9cis_level_1: true
     rhel9cis_level_2: false
     rhel9cis_rule_exceptions: []
 
-    # Vault binary install and system hardening
+    # --------------------------------------------------
+    # Vault install – pinned to 1.21.1
+    # robertdebock.vault defaults to an older version;
+    # we override here.  [oai_citation:9‡GitHub](https://github.com/robertdebock/ansible-role-vault?utm_source=chatgpt.com)
+    # --------------------------------------------------
     vault_type: oss
-    vault_version: "1.15.4"
+    vault_version: "1.21.1"
+    vault_package_release: "1"          # matches HashiCorp repo naming (e.g. vault-1.21.1-1)
+    vault_installation_method: "package"
+
+    # --------------------------------------------------
+    # Ports and paths
+    # --------------------------------------------------
     vault_api_port: 8200
     vault_cluster_port: 8201
-    vault_data_dir: /opt/vault/data
-    vault_tls_dir: /opt/vault/tls
+
+    # robertdebock.vault default: /opt/vault for data/TLS.  [oai_citation:10‡GitHub](https://github.com/robertdebock/ansible-role-vault?utm_source=chatgpt.com)
+    vault_data_directory: "/opt/vault"
+    vault_configuration_tls_directory: "/opt/vault/tls"
+
+    # Raft data lives under /opt/vault/data to match vault_configuration defaults.  [oai_citation:11‡galaxy.semaphoreui.com](https://galaxy.semaphoreui.com/zh/views/robertdebock/ansible-role-vault_configuration?utm_source=chatgpt.com)
+    vault_raft_data_path: "{{ vault_data_directory }}/data"
+
+    # --------------------------------------------------
+    # Public address behind HAProxy + Keepalived
+    # VIP:443 → TCP passthrough → vault_nodes:8200
+    # --------------------------------------------------
+    vault_public_fqdn: "vault.sos.oregon.local"   # adjust to your DNS
+    vault_public_port: 443
+
+    # What the UI and API advertise in redirects
+    vault_configuration_api_addr: "https://{{ vault_public_fqdn }}:{{ vault_public_port }}"
+
+    # Cluster address is node-local for Raft comms
+    vault_configuration_cluster_addr: "https://{{ ansible_fqdn }}:{{ vault_cluster_port }}"
+
+    # --------------------------------------------------
+    # Vault hardening (robertdebock.vault)
+    # --------------------------------------------------
     vault_hardening_disable_swap: true
     vault_hardening_disable_core_dumps: true
     vault_hardening_disable_shell_command_history: true
     vault_hardening_configure_selinux_apparmor: true
 
-    # TLS material: provide your own CA, cert, and key via vaulted variables
-    vault_tls_ca_cert: ""
-    vault_tls_cert: ""
-    vault_tls_key: ""
+    # Environment for the Vault systemd unit
+    vault_environment_settings:
+      - name: VAULT_API_ADDR
+        value: "{{ vault_configuration_api_addr }}"
+      - name: VAULT_CLUSTER_ADDR
+        value: "{{ vault_configuration_cluster_addr }}"
 
-    # vault.hcl configuration
+    # --------------------------------------------------
+    # TLS material – you can feed these from
+    # DigiCert TLM / ACME automation (Ansible/DigiCert
+    # guidance you already have).  [oai_citation:12‡ansible-lockdown.readthedocs.io](https://ansible-lockdown.readthedocs.io/_/downloads/en/latest/epub/?utm_source=chatgpt.com)
+    # --------------------------------------------------
+    vault_tls_ca_cert: ""   # PEM
+    vault_tls_cert: ""      # PEM
+    vault_tls_key: ""       # PEM
+
+    # --------------------------------------------------
+    # vault_configuration – listeners and storage
+    # --------------------------------------------------
     vault_configuration_owner: vault
     vault_configuration_group: vault
     vault_configuration_disable_mlock: false
     vault_configuration_ui: true
     vault_configuration_log_level: info
-    vault_configuration_api_addr: "https://{{ ansible_fqdn }}:{{ vault_api_port }}"
-    vault_configuration_cluster_addr: "https://{{ ansible_fqdn }}:{{ vault_cluster_port }}"
+
+    # TLS listener on 8200/8201; HAProxy is pure TCP
     vault_configuration_listeners:
       - type: tcp
         address: "0.0.0.0:{{ vault_api_port }}"
         cluster_address: "0.0.0.0:{{ vault_cluster_port }}"
+        http_idle_timeout: "5m"
+        http_read_header_timeout: "10s"
+        http_read_timeout: "30s"
+        http_write_timeout: "0"
+        max_request_size: 33554432
+        max_request_duration: "90s"
         tls_disable: false
-        tls_cert_file: "{{ vault_tls_dir }}/vault.crt"
-        tls_key_file: "{{ vault_tls_dir }}/vault.key"
-        tls_client_ca_file: "{{ vault_tls_dir }}/ca.crt"
-        tls_min_version: tls12
+        tls_cert_file: "{{ vault_configuration_tls_directory }}/vault.crt"
+        tls_key_file: "{{ vault_configuration_tls_directory }}/vault.key"
+        tls_client_ca_file: "{{ vault_configuration_tls_directory }}/ca.crt"
+        tls_min_version: "tls12"
+
+    # Optional unix listener for local agents
+    vault_configuration_listeners_unix:
+      - type: "unix"
+        address: "/run/vault/vault.sock"
+        socket_mode: "666"
+        socket_user: "vault"
+        socket_group: "vault"
+
+    # Raft storage – we only override the essentials;
+    # role defaults already align with /opt/vault/data.  [oai_citation:13‡galaxy.semaphoreui.com](https://galaxy.semaphoreui.com/zh/views/robertdebock/ansible-role-vault_configuration?utm_source=chatgpt.com)
     vault_configuration_storage_raft:
-      path: "{{ vault_data_dir }}"
+      path: "{{ vault_raft_data_path }}"
       node_id: "{{ inventory_hostname }}"
-      retry_join: "{{ vault_raft_retry_join | default([]) | to_json | from_json }}"
+      retry_join: "{{ vault_raft_retry_join | default([]) }}"
 
   pre_tasks:
-    - name: Build Raft retry_join targets from inventory
-      set_fact:
+    - name: Build Raft retry_join targets from inventory (exclude self)
+      ansible.builtin.set_fact:
         vault_raft_retry_join: >-
           {{ (vault_raft_retry_join | default([])) + [
                 {
-                  'leader_api_addr': 'https://' ~ (hostvars[item].ansible_host | default(hostvars[item].ansible_fqdn | default(item))) ~ ':' ~ (vault_api_port | string),
-                  'leader_ca_cert_file': vault_tls_dir ~ '/ca.crt'
+                  'leader_api_addr': 'https://' ~
+                                      (hostvars[item].ansible_host
+                                       | default(hostvars[item].ansible_fqdn | default(item))) ~
+                                      ':' ~ (vault_api_port | string),
+                  'leader_ca_cert_file': vault_configuration_tls_directory ~ '/ca.crt'
                 }
               ]
           }}
@@ -64,19 +131,40 @@
       when: item != inventory_hostname
 
   tasks:
-    - name: Apply RHEL 9.6 CIS Level 1 baseline
-      import_role:
+    # --------------------------------------------------
+    # 1. RHEL 9 CIS Level 1
+    # --------------------------------------------------
+    - name: Apply RHEL 9 CIS Level 1 baseline
+      ansible.builtin.import_role:
         name: ansible-lockdown.RHEL9-CIS
       tags: ['cis']
 
-    - name: Install Vault with system hardening
-      import_role:
+    # --------------------------------------------------
+    # 2. HashiCorp repo / prereqs
+    #    (does NOT install Vault itself in this pattern)
+    # --------------------------------------------------
+    - name: Prepare HashiCorp installation prerequisites
+      ansible.builtin.import_role:
+        name: robertdebock.hashicorp
+      vars:
+        hashicorp_installation_method: package
+        # No products listed – we let robertdebock.vault handle Vault itself.
+      tags: ['hashicorp', 'vault']
+
+    # --------------------------------------------------
+    # 3. Install Vault + hardening
+    # --------------------------------------------------
+    - name: Install Vault 1.21.1 with system hardening
+      ansible.builtin.import_role:
         name: robertdebock.vault
       tags: ['vault', 'install']
 
+    # --------------------------------------------------
+    # 4. TLS directory + certs
+    # --------------------------------------------------
     - name: Ensure Vault TLS directory exists
-      file:
-        path: "{{ vault_tls_dir }}"
+      ansible.builtin.file:
+        path: "{{ vault_configuration_tls_directory }}"
         state: directory
         owner: "{{ vault_configuration_owner }}"
         group: "{{ vault_configuration_group }}"
@@ -84,8 +172,8 @@
       tags: ['vault', 'tls']
 
     - name: Install CA certificate
-      copy:
-        dest: "{{ vault_tls_dir }}/ca.crt"
+      ansible.builtin.copy:
+        dest: "{{ vault_configuration_tls_directory }}/ca.crt"
         content: "{{ vault_tls_ca_cert }}"
         owner: "{{ vault_configuration_owner }}"
         group: "{{ vault_configuration_group }}"
@@ -94,8 +182,8 @@
       tags: ['vault', 'tls']
 
     - name: Install server certificate
-      copy:
-        dest: "{{ vault_tls_dir }}/vault.crt"
+      ansible.builtin.copy:
+        dest: "{{ vault_configuration_tls_directory }}/vault.crt"
         content: "{{ vault_tls_cert }}"
         owner: "{{ vault_configuration_owner }}"
         group: "{{ vault_configuration_group }}"
@@ -104,8 +192,8 @@
       tags: ['vault', 'tls']
 
     - name: Install server key
-      copy:
-        dest: "{{ vault_tls_dir }}/vault.key"
+      ansible.builtin.copy:
+        dest: "{{ vault_configuration_tls_directory }}/vault.key"
         content: "{{ vault_tls_key }}"
         owner: "{{ vault_configuration_owner }}"
         group: "{{ vault_configuration_group }}"
@@ -113,8 +201,10 @@
       when: vault_tls_key | length > 0
       tags: ['vault', 'tls']
 
-    - name: Configure Vault service
-      import_role:
+    # --------------------------------------------------
+    # 5. Render vault.hcl and restart service
+    # --------------------------------------------------
+    - name: Configure Vault service (vault.hcl, env, systemd)
+      ansible.builtin.import_role:
         name: robertdebock.vault_configuration
       tags: ['vault', 'config']
-
