@@ -128,7 +128,19 @@
 
   pre_tasks:
     - name: Obtain TLS certificates via DigiCert ACME
-      ansible.builtin.import_tasks: tls/digicert-acme.yml
+      block:
+        - name: Import ACME task file
+          ansible.builtin.import_tasks: tls/digicert-acme.yml
+      rescue:
+        - name: ACME certificate acquisition failed
+          ansible.builtin.fail:
+            msg: |
+              ACME certificate acquisition failed. Common causes:
+              - Domain validation failed (ensure port 80 is accessible and challenge handler is configured)
+              - Invalid ACME credentials (check acme_eab_kid and acme_eab_key)
+              - Network connectivity issues to ACME directory URL
+              - Invalid contact email or missing required configuration
+              Check the error above for specific details.
       delegate_to: localhost
       run_once: true
       when: acme_enabled | bool

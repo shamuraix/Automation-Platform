@@ -65,7 +65,9 @@
 - name: Request certificate via ACME (with http-01 challenge)
   # NOTE: http-01 challenge requires port 80 to be accessible from the internet
   # and a web server to serve challenge files from /.well-known/acme-challenge/
-  # for domain validation to succeed. Ensure your infrastructure supports this.
+  # This task will return challenge data that must be handled by your infrastructure
+  # (e.g., a separate web server or load balancer serving the challenge response).
+  # If automatic challenge handling is not configured, manual intervention may be required.
   community.crypto.acme_certificate:
     account_key_src: "{{ acme_data_dir }}/acme-account.key"
     account_email: "{{ acme_contact_email }}"
@@ -84,6 +86,14 @@
 
 - name: Display ACME challenge information
   ansible.builtin.debug:
-    msg: "ACME certificate issuance completed successfully for {{ acme_cert_cn }}"
-  when: acme_challenge_result.changed
+    msg: |
+      ACME certificate operation completed for {{ acme_cert_cn }}
+      Certificate changed: {{ acme_challenge_result.changed }}
+      {% if acme_challenge_result.cert_days is defined %}
+      Certificate valid for: {{ acme_challenge_result.cert_days }} days
+      {% endif %}
+      {% if acme_challenge_result.challenge_data is defined %}
+      Challenge data available for troubleshooting if needed
+      {% endif %}
+    verbosity: 1
   tags: ['digicert', 'acme', 'tls']
