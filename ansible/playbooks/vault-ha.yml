@@ -73,6 +73,19 @@
     vault_tls_key: ""       # PEM
 
     # --------------------------------------------------
+    # DigiCert ACME TLS automation
+    # --------------------------------------------------
+    acme_enabled: false                                    # Enable/disable ACME-based TLS
+    acme_directory_url: "https://acme.digicert.com/v2/acme/directory"
+    acme_data_dir: "/tmp/acme-certs"                       # Local directory on controller for ACME artifacts
+    acme_cert_cn: "{{ vault_public_fqdn }}"                # Certificate Common Name
+    acme_subject_alt_name: []                              # List of SANs (e.g., ["DNS:vault.example.com", "DNS:vault-alt.example.com"])
+    acme_contact_email: "admin@example.com"                # Contact email for ACME account
+    acme_eab_kid: ""                                       # External Account Binding Key ID
+    acme_eab_key: ""                                       # External Account Binding Key (base64)
+    acme_eab_alg: "HS256"                                  # EAB Algorithm (typically HS256)
+
+    # --------------------------------------------------
     # vault_configuration – listeners and storage
     # --------------------------------------------------
     vault_configuration_owner: vault
@@ -114,6 +127,13 @@
       retry_join: "{{ vault_raft_retry_join | default([]) }}"
 
   pre_tasks:
+    - name: Obtain TLS certificates via DigiCert ACME
+      ansible.builtin.import_tasks: tls/digicert-acme.yml
+      delegate_to: localhost
+      run_once: true
+      when: acme_enabled | bool
+      tags: ['digicert', 'acme', 'tls']
+
     - name: Build Raft retry_join targets from inventory (exclude self)
       ansible.builtin.set_fact:
         vault_raft_retry_join: >-
@@ -171,6 +191,39 @@
         mode: '0750'
       tags: ['vault', 'tls']
 
+    # ACME-based TLS distribution
+    - name: Install CA certificate from ACME chain
+      ansible.builtin.copy:
+        src: "{{ acme_data_dir }}/{{ acme_cert_cn }}-chain.pem"
+        dest: "{{ vault_configuration_tls_directory }}/ca.crt"
+        owner: "{{ vault_configuration_owner }}"
+        group: "{{ vault_configuration_group }}"
+        mode: '0644'
+      when: acme_enabled | bool
+      tags: ['vault', 'tls', 'acme']
+
+    - name: Install server certificate from ACME fullchain
+      ansible.builtin.copy:
+        src: "{{ acme_data_dir }}/{{ acme_cert_cn }}-fullchain.pem"
+        dest: "{{ vault_configuration_tls_directory }}/vault.crt"
+        owner: "{{ vault_configuration_owner }}"
+        group: "{{ vault_configuration_group }}"
+        mode: '0644'
+      when: acme_enabled | bool
+      tags: ['vault', 'tls', 'acme']
+
+    - name: Install server key from ACME
+      ansible.builtin.copy:
+        src: "{{ acme_data_dir }}/{{ acme_cert_cn }}.key"
+        dest: "{{ vault_configuration_tls_directory }}/vault.key"
+        owner: "{{ vault_configuration_owner }}"
+        group: "{{ vault_configuration_group }}"
+        mode: '0600'
+      when: acme_enabled | bool
+      no_log: true
+      tags: ['vault', 'tls', 'acme']
+
+    # Manual TLS distribution (fallback when ACME is disabled)
     - name: Install CA certificate
       ansible.builtin.copy:
         dest: "{{ vault_configuration_tls_directory }}/ca.crt"
@@ -178,7 +231,9 @@
         owner: "{{ vault_configuration_owner }}"
         group: "{{ vault_configuration_group }}"
         mode: '0644'
-      when: vault_tls_ca_cert | length > 0
+      when:
+        - not (acme_enabled | bool)
+        - vault_tls_ca_cert | length > 0
       tags: ['vault', 'tls']
 
     - name: Install server certificate
@@ -188,7 +243,9 @@
         owner: "{{ vault_configuration_owner }}"
         group: "{{ vault_configuration_group }}"
         mode: '0644'
-      when: vault_tls_cert | length > 0
+      when:
+        - not (acme_enabled | bool)
+        - vault_tls_cert | length > 0
       tags: ['vault', 'tls']
 
     - name: Install server key
@@ -198,7 +255,10 @@
         owner: "{{ vault_configuration_owner }}"
         group: "{{ vault_configuration_group }}"
         mode: '0600'
-      when: vault_tls_key | length > 0
+      when:
+        - not (acme_enabled | bool)
+        - vault_tls_key | length > 0
+      no_log: true
       tags: ['vault', 'tls']
 
     # --------------------------------------------------
