@@ -3,6 +3,16 @@
 # This file implements the DigiCert ACME flow using community.crypto modules
 # Runs on the Ansible controller (localhost) via delegation from the parent play
 
+- name: Validate ACME configuration
+  ansible.builtin.assert:
+    that:
+      - acme_contact_email | length > 0
+      - acme_eab_kid | length > 0
+      - acme_eab_key | length > 0
+    fail_msg: "ACME configuration incomplete: acme_contact_email, acme_eab_kid, and acme_eab_key must be set"
+    success_msg: "ACME configuration validated successfully"
+  tags: ['digicert', 'acme', 'tls']
+
 - name: Ensure ACME data directory exists on controller
   ansible.builtin.file:
     path: "{{ acme_data_dir }}"
@@ -53,6 +63,9 @@
   tags: ['digicert', 'acme', 'tls']
 
 - name: Request certificate via ACME (with http-01 challenge)
+  # NOTE: http-01 challenge requires port 80 to be accessible from the internet
+  # and a web server to serve challenge files from /.well-known/acme-challenge/
+  # for domain validation to succeed. Ensure your infrastructure supports this.
   community.crypto.acme_certificate:
     account_key_src: "{{ acme_data_dir }}/acme-account.key"
     account_email: "{{ acme_contact_email }}"

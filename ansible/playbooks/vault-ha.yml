@@ -77,10 +77,10 @@
     # --------------------------------------------------
     acme_enabled: false                                    # Enable/disable ACME-based TLS
     acme_directory_url: "https://acme.digicert.com/v2/acme/directory"
-    acme_data_dir: "/tmp/acme-certs"                       # Local directory on controller for ACME artifacts
+    acme_data_dir: "~/.acme-certs"                         # Local directory on controller for ACME artifacts (use secure path, not /tmp)
     acme_cert_cn: "{{ vault_public_fqdn }}"                # Certificate Common Name
     acme_subject_alt_name: []                              # List of SANs (e.g., ["DNS:vault.example.com", "DNS:vault-alt.example.com"])
-    acme_contact_email: "admin@example.com"                # Contact email for ACME account
+    acme_contact_email: ""                                 # Contact email for ACME account (REQUIRED - must be set before enabling ACME)
     acme_eab_kid: ""                                       # External Account Binding Key ID
     acme_eab_key: ""                                       # External Account Binding Key (base64)
     acme_eab_alg: "HS256"                                  # EAB Algorithm (typically HS256)
