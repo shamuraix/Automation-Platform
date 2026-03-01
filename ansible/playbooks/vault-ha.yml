@@ -39,7 +39,7 @@
     # Public address behind HAProxy + Keepalived
     # VIP:443 → TCP passthrough → vault_nodes:8200
     # --------------------------------------------------
-    vault_public_fqdn: "vault.sos.oregon.local"   # adjust to your DNS
+    vault_public_fqdn: "vault.home.arpa"   # adjust to your DNS
     vault_public_port: 443
 
     # What the UI and API advertise in redirects
@@ -64,26 +64,12 @@
         value: "{{ vault_configuration_cluster_addr }}"
 
     # --------------------------------------------------
-    # TLS material – you can feed these from
-    # DigiCert TLM / ACME automation (Ansible/DigiCert
-    # guidance you already have).  [oai_citation:12‡ansible-lockdown.readthedocs.io](https://ansible-lockdown.readthedocs.io/_/downloads/en/latest/epub/?utm_source=chatgpt.com)
+    # TLS material – you can feed these from ACME
+    # automation (Ansible guidance you already have).  [oai_citation:12‡ansible-lockdown.readthedocs.io](https://ansible-lockdown.readthedocs.io/_/downloads/en/latest/epub/?utm_source=chatgpt.com)
     # --------------------------------------------------
-    vault_tls_ca_cert: ""   # PEM
-    vault_tls_cert: ""      # PEM
-    vault_tls_key: ""       # PEM
-
-    # --------------------------------------------------
-    # DigiCert ACME TLS automation
-    # --------------------------------------------------
-    acme_enabled: false                                    # Enable/disable ACME-based TLS
-    acme_directory_url: "https://acme.digicert.com/v2/acme/directory"
-    acme_data_dir: "~/.acme-certs"                         # Local directory on controller for ACME artifacts (use secure path, not /tmp)
-    acme_cert_cn: "{{ vault_public_fqdn }}"                # Certificate Common Name
-    acme_subject_alt_name: []                              # List of SANs (e.g., ["DNS:vault.example.com", "DNS:vault-alt.example.com"])
-    acme_contact_email: ""                                 # Contact email for ACME account (REQUIRED - must be set before enabling ACME)
-    acme_eab_kid: ""                                       # External Account Binding Key ID
-    acme_eab_key: ""                                       # External Account Binding Key (base64)
-    acme_eab_alg: "HS256"                                  # EAB Algorithm (typically HS256)
+    vault_tls_ca_cert: ""
+    vault_tls_cert: ""
+    vault_tls_key: ""
 
     # --------------------------------------------------
     # vault_configuration – listeners and storage
